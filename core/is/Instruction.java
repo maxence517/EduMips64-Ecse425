@@ -192,8 +192,8 @@ public abstract class Instruction {
      * Now it is used in order to generate the Dinero trace-file
      *</pre>   
      */
-    public void IF() throws BreakException {}
-    
+    public void IF() throws BreakException, RAWException, IrregularWriteOperationException, IrregularStringOfBitsException, JumpException, TwosComplementSumException, BranchException {}
+
     /**
      * <pre>
      * Decode stage of the Pipeline
@@ -201,16 +201,16 @@ public abstract class Instruction {
      *</pre>
      **/
     public abstract void ID() throws RAWException,IrregularWriteOperationException,IrregularStringOfBitsException,TwosComplementSumException,HaltException,JumpException, BreakException;
-    
+
     /**
      * <pre>
      * Execute stage of the Pipeline
      * In this stage all Alu Instructions perform their computations and save results in temporary registers
      * </pre>
      **/
-    
-    public abstract void EX() throws HaltException, IrregularStringOfBitsException,IntegerOverflowException,TwosComplementSumException,IrregularWriteOperationException,IrregularWriteOperationException,DivisionByZeroException;
-    
+
+    public abstract void EX() throws HaltException, IrregularStringOfBitsException,IntegerOverflowException,TwosComplementSumException,IrregularWriteOperationException,IrregularWriteOperationException,DivisionByZeroException,BranchException;
+
     /**
      * <pre>
      * Memory stage of the Pipeline

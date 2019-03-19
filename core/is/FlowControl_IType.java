@@ -52,7 +52,7 @@ public abstract class FlowControl_IType extends FlowControlInstructions {
     public void ID() throws RAWException, IrregularWriteOperationException, IrregularStringOfBitsException,JumpException,TwosComplementSumException {
     }
 
-    public void EX() throws IrregularStringOfBitsException, IntegerOverflowException,IrregularWriteOperationException {
+    public void EX() throws IrregularStringOfBitsException, IntegerOverflowException,IrregularWriteOperationException,TwosComplementSumException,BranchException {
     }
 
     public void MEM() throws IrregularStringOfBitsException, MemoryElementNotFoundException {

@@ -33,6 +33,7 @@ import edumips64.utils.*;
 */
 public class CPU 
 {
+	private static int branchTaken, branchNotTaken, branchMiss;	//custom
 	private Memory mem;
 	private Register[] gpr;
     private static final Logger logger = Logger.getLogger(CPU.class.getName());
@@ -80,7 +81,7 @@ public class CPU
 	private static CPU cpu;
 
 	/** Statistics */
-	private int cycles, instructions, RAWStalls; 
+	private int cycles, instructions, RAWStalls, WAWStalls, dividerStalls, funcUnitStalls, memoryStalls, exStalls;
 
 	/** Static initializer */
 	static {
@@ -162,7 +163,30 @@ public class CPU
     {
         return symTable;
     }
-    
+
+    //custom
+    public int getBranchTaken(){
+	    return branchTaken;
+    }
+
+    //custom
+    public int getBranchNotTaken(){
+	    return branchNotTaken;
+    }
+
+    //custon
+    public int getBranchMiss(){
+	    return branchMiss;
+    }
+
+    //custom
+    public static void incrementBranchTaken(){
+	    branchTaken++;
+    }
+    //custom
+    public static void incrementBranchNotTaken(){
+	    branchNotTaken++;
+    }
     /** This method returns a specific GPR
     * @param index the register number (0-31)
     */
@@ -200,148 +224,182 @@ public class CPU
     /** This method performs a single pipeline step
     * @throw RAWHazardException when a RAW hazard is detected
     */
-    public void step() throws IntegerOverflowException, AddressErrorException, HaltException, IrregularWriteOperationException, StoppedCPUException, MemoryElementNotFoundException, IrregularStringOfBitsException, TwosComplementSumException, SynchronousException, BreakException
-	{
-		/* The integer "breaking" is used to keep track of the BREAK
-		 * instruction. When the BREAK instruction enters ID, the BreakException
-		 * is thrown. We continue the normal cpu step flow, and at the end of
-		 * this flow the BreakException is re-thrown.
-		 */
-		int breaking = 0;
+    public void step() throws IntegerOverflowException, AddressErrorException, HaltException, IrregularWriteOperationException, StoppedCPUException, MemoryElementNotFoundException, IrregularStringOfBitsException, TwosComplementSumException, SynchronousException, BreakException {
+        /* The integer "breaking" is used to keep track of the BREAK
+         * instruction. When the BREAK instruction enters ID, the BreakException
+         * is thrown. We continue the normal cpu step flow, and at the end of
+         * this flow the BreakException is re-thrown.
+         */
+        int breaking = 0;
 
-		// Used for exception handling
-		boolean masked = (Boolean)Config.get("syncexc-masked");
-		boolean terminate = (Boolean)Config.get("syncexc-terminate");
-		String syncex = null;
+        // Used for exception handling
+        boolean masked = (Boolean) Config.get("syncexc-masked");
+        boolean terminate = (Boolean) Config.get("syncexc-terminate");
+        String syncex = null;
 
-		if(status != CPUStatus.RUNNING && status != CPUStatus.STOPPING)
-			throw new StoppedCPUException();
-		try
-		{
-			logger.info("Starting cycle " + ++cycles + "\n---------------------------------------------");
-			currentPipeStatus = PipeStatus.WB; 
+        if (status != CPUStatus.RUNNING && status != CPUStatus.STOPPING)
+            throw new StoppedCPUException();
+        try {
+            logger.info("Starting cycle " + ++cycles + "\n---------------------------------------------");
+            currentPipeStatus = PipeStatus.WB;
 
-			// Let's execute the WB() method of the instruction located in the 
-			// WB pipeline status
-			if(pipe.get(PipeStatus.WB)!=null) {
-				pipe.get(PipeStatus.WB).WB();
-				if(!pipe.get(PipeStatus.WB).getName().equals(" "))
-					instructions++;
-			}
+            // Let's execute the WB() method of the instruction located in the
+            // WB pipeline status
+            if (pipe.get(PipeStatus.WB) != null) {
+                pipe.get(PipeStatus.WB).WB();
+                if (!pipe.get(PipeStatus.WB).getName().equals(" "))
+                    instructions++;
+            }
 
-			// We put null in WB, in order to avoid that an exception thrown in 
-			// the next instruction leaves the already completed instruction in 
-			// the WB pipeline state
-			pipe.put(PipeStatus.WB, null);
+            // We put null in WB, in order to avoid that an exception thrown in
+            // the next instruction leaves the already completed instruction in
+            // the WB pipeline state
+            pipe.put(PipeStatus.WB, null);
 
-			// MEM
-			currentPipeStatus = PipeStatus.MEM;
-			if(pipe.get(PipeStatus.MEM)!=null)
-				pipe.get(PipeStatus.MEM).MEM();
-			pipe.put(PipeStatus.WB, pipe.get(PipeStatus.MEM));
+            // MEM
+            currentPipeStatus = PipeStatus.MEM;
+            if (pipe.get(PipeStatus.MEM) != null)
+                pipe.get(PipeStatus.MEM).MEM();
+                System.out.println("mem");
+            pipe.put(PipeStatus.WB, pipe.get(PipeStatus.MEM));
 
-			// EX
-			try {
-				// Handling synchronous exceptions
-				currentPipeStatus = PipeStatus.EX;
-				if(pipe.get(PipeStatus.EX)!=null)
-					pipe.get(PipeStatus.EX).EX();
-			}
-			catch (SynchronousException e) {
-				if(masked)
-					logger.info("[EXCEPTION] [MASKED] " + e.getCode());
-				else {
-					if(terminate) {
-						logger.info("Terminating due to an unmasked exception");
-						throw new SynchronousException(e.getCode());
-					}
-					else
-						// We must complete this cycle, but we must notify the user.
-						// If the syncex string is not null, the CPU code will throw
-						// the exception at the end of the step
-						syncex = e.getCode();
-				}
-			}
-			pipe.put(PipeStatus.MEM, pipe.get(PipeStatus.EX));
-
-			// ID
-			currentPipeStatus = PipeStatus.ID;
-			if(pipe.get(PipeStatus.ID)!=null)
-				pipe.get(PipeStatus.ID).ID();
-			pipe.put(PipeStatus.EX, pipe.get(PipeStatus.ID));
-
-			// IF
-			// We don't have to execute any methods, but we must get the new 
-			// instruction from the symbol table.
-			currentPipeStatus = PipeStatus.IF;
-
-			if(status == CPUStatus.RUNNING) {
-				if(pipe.get(PipeStatus.IF) != null) { //rispetto a dinmips scambia le load con le IF
-					try {
-						pipe.get(PipeStatus.IF).IF();
-					}
-					catch (BreakException exc) {
-						breaking = 1;
-						logger.info("breaking = 1");
-					}
-				}
-				pipe.put(PipeStatus.ID, pipe.get(PipeStatus.IF));
-				pipe.put(PipeStatus.IF, mem.getInstruction(pc));
-				old_pc.writeDoubleWord((pc.getValue()));
-				pc.writeDoubleWord((pc.getValue())+4);
-			}
-			else
-			{
-				pipe.put(PipeStatus.ID, Instruction.buildInstruction("BUBBLE"));
-			}
-			if(breaking == 1) {
-				breaking = 0;
-				logger.info("Re-thrown the exception");
-				throw new BreakException();
-			}
-			if(syncex != null)
-				throw new SynchronousException(syncex);
-		}
-		catch(JumpException ex)
-		{
+            // EX
             try {
-                if(pipe.get(PipeStatus.IF) != null) //rispetto a dimips scambia le load con le IF
-                        pipe.get(PipeStatus.IF).IF();
+                // Handling synchronous exceptions
+                currentPipeStatus = PipeStatus.EX;
+                if (pipe.get(PipeStatus.EX) != null)
+                    pipe.get(PipeStatus.EX).EX();
+            } catch (SynchronousException e) {
+                if (masked)
+                    logger.info("[EXCEPTION] [MASKED] " + e.getCode());
+                else {
+                    if (terminate) {
+                        logger.info("Terminating due to an unmasked exception");
+                        throw new SynchronousException(e.getCode());
+                    } else
+                        // We must complete this cycle, but we must notify the user.
+                        // If the syncex string is not null, the CPU code will throw
+                        // the exception at the end of the step
+                        syncex = e.getCode();
+                }
             }
-            catch(BreakException bex) {
-				logger.info("Caught a BREAK after a Jump: ignoring it.");
+            pipe.put(PipeStatus.MEM, pipe.get(PipeStatus.EX));
+
+            // ID
+
+            currentPipeStatus = PipeStatus.ID;
+            if (pipe.get(PipeStatus.ID) != null)
+                pipe.get(PipeStatus.ID).ID();
+                System.out.println("ID");
+            pipe.put(PipeStatus.EX, pipe.get(PipeStatus.ID));
+
+            // IF
+            // We don't have to execute any methods, but we must get the new
+            // instruction from the symbol table.
+            currentPipeStatus = PipeStatus.IF;
+
+            if (status == CPUStatus.RUNNING) {
+                if (pipe.get(PipeStatus.IF) != null) { //rispetto a dinmips scambia le load con le IF
+                    try {
+						System.out.println("IF");
+						pipe.get(PipeStatus.IF).IF();
+                    } catch (JumpException exc) {
+                        breaking = 1;
+                        logger.info("breaking = 1");
+                    }
+                }
+                pipe.put(PipeStatus.ID, pipe.get(PipeStatus.IF));
+                pipe.put(PipeStatus.IF, mem.getInstruction(pc));
+                old_pc.writeDoubleWord((pc.getValue()));
+                pc.writeDoubleWord((pc.getValue()) + 4);
+            } else {
+                pipe.put(PipeStatus.ID, Instruction.buildInstruction("BUBBLE"));
             }
+            if (breaking == 1) {
+                breaking = 0;
+                logger.info("Re-thrown the exception");
+                throw new BreakException();
+            }
+            if (syncex != null)
+                throw new SynchronousException(syncex);
+        } catch (JumpException ex) {
+            try {
+                if (pipe.get(PipeStatus.IF) != null) { //rispetto a dimips scambia le load con le IF
+					System.out.println("I-type");
+					pipe.get(PipeStatus.IF).IF();
+				}
+            } catch (BreakException bex) {
+                logger.info("Caught a BREAK after a Jump: ignoring it.");
+            } catch (BranchException e) {
+				e.printStackTrace();
+			} catch (RAWException e) {
+				e.printStackTrace();
+			} catch (JumpException e) {
+				e.printStackTrace();
+			}
 
 			// A J-Type instruction has just modified the Program Counter. We need to
-			// put in the IF state the instruction the PC points to
-			pipe.put(PipeStatus.IF, mem.getInstruction(pc));
-			pipe.put(PipeStatus.EX, pipe.get(PipeStatus.ID));
-			pipe.put(PipeStatus.ID, Instruction.buildInstruction("BUBBLE"));	
-			old_pc.writeDoubleWord((pc.getValue()));
-			pc.writeDoubleWord((pc.getValue())+4);
-			if(syncex != null)
-				throw new SynchronousException(syncex);
+            // put in the IF state the instruction the PC points to
+            pipe.put(PipeStatus.IF, mem.getInstruction(pc));
+            pipe.put(PipeStatus.EX, pipe.get(PipeStatus.ID));
+            pipe.put(PipeStatus.ID, Instruction.buildInstruction("BUBBLE"));
+            old_pc.writeDoubleWord((pc.getValue()));
+            pc.writeDoubleWord((pc.getValue()) + 4);
+            if (syncex != null)
+                throw new SynchronousException(syncex);
 
-		}
-		catch(RAWException ex)
-		{
-			if(currentPipeStatus == PipeStatus.ID)
-				pipe.put(PipeStatus.EX, Instruction.buildInstruction("BUBBLE"));
-			RAWStalls++;
-			if(syncex != null)
-				throw new SynchronousException(syncex);
+        } catch (RAWException ex) {
+            if (currentPipeStatus == PipeStatus.ID)
+                pipe.put(PipeStatus.EX, Instruction.buildInstruction("BUBBLE"));
+            RAWStalls++;
+            if (syncex != null)
+                throw new SynchronousException(syncex);
 
-		}
-		catch(SynchronousException ex) {
-			logger.info("Exception: " + ex.getCode());
-			throw ex;
-		}
-		catch(HaltException ex)
-		{
-			pipe.put(PipeStatus.WB, null);
-			throw ex;		
-		}
-	}   
+        } catch (SynchronousException ex) {
+            logger.info("Exception: " + ex.getCode());
+            throw ex;
+        } catch (HaltException ex) {
+            pipe.put(PipeStatus.WB, null);
+            throw ex;
+        } catch (BranchException ex) {
+
+            try {
+                if (pipe.get(PipeStatus.IF) != null) //rispetto a dimips scambia le load con le IF
+                {
+					System.out.println("Random type");
+					pipe.get(PipeStatus.IF).IF();
+                }
+            } catch (BreakException bex) {
+                logger.info("Caught a BREAK after a Jump: ignoring it.");
+            } catch (BranchException e) {
+				e.printStackTrace();
+			} catch (RAWException e) {
+				e.printStackTrace();
+			} catch (JumpException e) {
+				e.printStackTrace();
+			}
+			//BranchMiss++;
+            // A J-Type instruction has just modified the Program Counter. We need to
+            // put in the IF state the instruction the PC points to
+            pipe.put(PipeStatus.EX, Instruction.buildInstruction("NOP"));
+            pipe.put(PipeStatus.ID, Instruction.buildInstruction("BUBBLE"));
+            pipe.put(PipeStatus.MEM, pipe.get(PipeStatus.EX));
+            pipe.put(PipeStatus.IF, mem.getInstruction(pc));
+
+            //pipe.put(PipeStatus.EX, Instruction.buildInstruction("BUBBLE"));
+            old_pc.writeDoubleWord((pc.getValue()));
+            pc.writeDoubleWord((pc.getValue()) + 4);
+
+            //pipe.put(PipeStatus.ID, pipe.get(PipeStatus.IF));
+            //pipe.put(PipeStatus.IF, mem.getInstruction(pc));
+            //old_pc.writeDoubleWord((pc.getValue()));
+            //pc.writeDoubleWord((pc.getValue())+4);
+
+            if (syncex != null) {
+                throw new SynchronousException(syncex);
+            }
+        }
+    }
 
 	/** Gets the Program Counter register
 	 *  @return a Register object
@@ -356,7 +414,7 @@ public class CPU
 		return old_pc;
 	}
 	
-	/** Gets the LO register. It contains integer results of doubleword division
+	/** Gets the LO register. It contains integer BranchException of doubleword division
 	* @return a Register object
 	*/
 	public Register getLO() {

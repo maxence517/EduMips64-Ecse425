@@ -36,13 +36,37 @@ import edumips64.utils.*;
 
 public class BNE extends FlowControl_IType {
     final String OPCODE_VALUE="000101";
-    
+
     public BNE() {
         super.OPCODE_VALUE = OPCODE_VALUE;
         syntax="%R,%R,%B";
 	name="BNE";
     }
 
+    // IF stage is performing the prediction - jumping to the predicted location
+    @Override
+    public void IF() throws RAWException, IrregularWriteOperationException, IrregularStringOfBitsException, JumpException, TwosComplementSumException {
+
+        BitSet64 bs = new BitSet64();
+        bs.writeHalf(params.get(OFFSET_FIELD));
+        String offset = bs.getBinString();
+//        boolean condition = !rs.equals(rt);
+//
+//        if (condition) {
+            String pc_new = "";
+            Register pc = cpu.getPC();
+            String pc_old = cpu.getPC().getBinString();
+
+            //updating program counter
+            pc_new = InstructionsUtils.twosComplementSum(pc_old, offset);
+            System.out.println("PC_EWWWWW:"+pc_new);
+            pc.setBits(pc_new, 0);
+
+            throw new JumpException();
+//        }
+    }
+
+    // ID stage resolves the branch - determines
     public void ID() throws RAWException, IrregularWriteOperationException, IrregularStringOfBitsException,TwosComplementSumException, JumpException {
         if(cpu.getRegister(params.get(RS_FIELD)).getWriteSemaphore()>0 || cpu.getRegister(params.get(RT_FIELD)).getWriteSemaphore()>0)
             throw new RAWException();
@@ -54,24 +78,23 @@ public class BNE extends FlowControl_IType {
         bs.writeHalf(params.get(OFFSET_FIELD));
         String offset=bs.getBinString();
         boolean condition=!rs.equals(rt);
-        if(condition)
+
+        if(!condition)
         {
             String pc_new="";
             Register pc=cpu.getPC();
             String pc_old=cpu.getPC().getBinString();
-            
-           //subtracting 4 to the pc_old temporary variable using bitset64 safe methods
-            BitSet64 bs_temp=new BitSet64();
-            bs_temp.writeDoubleWord(-4);
-            pc_old=InstructionsUtils.twosComplementSum(pc_old,bs_temp.getBinString());
-           
-            //updating program counter
-            pc_new=InstructionsUtils.twosComplementSum(pc_old,offset);
-            pc.setBits(pc_new,0);
-            
-            throw new JumpException(); 
-        }    
-    }
 
-    
+            BitSet64 bs_temp = new BitSet64();
+            bs_temp.writeDoubleWord(-4);
+            pc_old = InstructionsUtils.twosComplementSum(pc_old, bs_temp.getBinString());
+
+            //updating program counter
+            pc_new=InstructionsUtils.twosComplementSubstraction(pc_old,offset);
+            pc.setBits(pc_new,0);
+
+            throw new JumpException();
+        }
+
+    }
 }
