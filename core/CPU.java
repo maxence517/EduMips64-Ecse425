@@ -80,8 +80,10 @@ public class CPU
 	
 	private static CPU cpu;
 
+	public static final int N_FORNBITPREDICTOR = 4;
+
 	/** Statistics */
-	private int cycles, instructions, RAWStalls, WAWStalls, dividerStalls, funcUnitStalls, memoryStalls, exStalls;
+	private int nBitCount, cycles, instructions, RAWStalls, WAWStalls, dividerStalls, funcUnitStalls, memoryStalls, exStalls;
 
 	/** Static initializer */
 	static {
@@ -89,6 +91,9 @@ public class CPU
 	}
 	private CPU()
 	{
+		//Counter for n-bit local predictor
+		nBitCount = 0;
+
 		// To avoid future singleton problems
 		Instruction dummy = Instruction.buildInstruction("BUBBLE");
 
@@ -117,6 +122,17 @@ public class CPU
 		logger.info("CPU Created.");
 	}
 
+	/**
+	 * Global counter for n-bit local predictor
+	 * @return
+	 */
+	public int getnBitCount() {
+		return nBitCount;
+	}
+
+	public void setnBitCount(int nBitCount) {
+		this.nBitCount = nBitCount;
+	}
 	
 
 	/** Sets the CPU status.

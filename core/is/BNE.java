@@ -37,6 +37,7 @@ import edumips64.utils.*;
 public class BNE extends FlowControl_IType {
     final String OPCODE_VALUE="000101";
 
+
     public BNE() {
         super.OPCODE_VALUE = OPCODE_VALUE;
         syntax="%R,%R,%B";
@@ -44,30 +45,51 @@ public class BNE extends FlowControl_IType {
     }
 
     // IF stage is performing the prediction - jumping to the predicted location
+    // IF stage performs n-bit local predictor - jumps (predict taken) if CPU counter is >= ^(n-1)
+
+    /**
+     * IF stage performs n-bit local predictor - jumps (predict taken) if CPU counter is >= 2^(n-1) otherwise, will perform predict not taken
+     *
+     * @throws RAWException
+     * @throws IrregularWriteOperationException
+     * @throws IrregularStringOfBitsException
+     * @throws JumpException
+     * @throws TwosComplementSumException
+     */
     @Override
     public void IF() throws RAWException, IrregularWriteOperationException, IrregularStringOfBitsException, JumpException, TwosComplementSumException {
+
+        //Gets CPU
+        int currentCount = cpu.getnBitCount();
+        double boundaryCount = Math.pow(2,CPU.N_FORNBITPREDICTOR-1);
 
         BitSet64 bs = new BitSet64();
         bs.writeHalf(params.get(OFFSET_FIELD));
         String offset = bs.getBinString();
-//        boolean condition = !rs.equals(rt);
-//
-//        if (condition) {
-            String pc_new = "";
-            Register pc = cpu.getPC();
-            String pc_old = cpu.getPC().getBinString();
 
+        String pc_new = "";
+        Register pc = cpu.getPC();
+
+        String pc_old = cpu.getPC().getBinString();
+
+        if(currentCount >= boundaryCount) {
             //updating program counter
             pc_new = InstructionsUtils.twosComplementSum(pc_old, offset);
             System.out.println("PC_EWWWWW:"+pc_new);
             pc.setBits(pc_new, 0);
 
             throw new JumpException();
-//        }
+        }
     }
 
     // ID stage resolves the branch - determines
     public void ID() throws RAWException, IrregularWriteOperationException, IrregularStringOfBitsException,TwosComplementSumException, JumpException {
+
+        //Gets CPU
+        int currentCount = cpu.getnBitCount();
+        double boundaryCount = Math.pow(2,CPU.N_FORNBITPREDICTOR-1);
+
+
         if(cpu.getRegister(params.get(RS_FIELD)).getWriteSemaphore()>0 || cpu.getRegister(params.get(RT_FIELD)).getWriteSemaphore()>0)
             throw new RAWException();
         //getting registers rs and rt
@@ -77,24 +99,35 @@ public class BNE extends FlowControl_IType {
         BitSet64 bs=new BitSet64();
         bs.writeHalf(params.get(OFFSET_FIELD));
         String offset=bs.getBinString();
-        boolean condition=!rs.equals(rt);
+        boolean condition=!rs.equals(rt); //condition is if you have to branch or not. Condition = branch (taken), !condition = do not branch (not taken)
 
-        if(!condition)
-        {
-            String pc_new="";
-            Register pc=cpu.getPC();
-            String pc_old=cpu.getPC().getBinString();
+        String pc_new="";
+        Register pc=cpu.getPC();
+        String pc_old=cpu.getPC().getBinString();
 
-            BitSet64 bs_temp = new BitSet64();
-            bs_temp.writeDoubleWord(-4);
-            pc_old = InstructionsUtils.twosComplementSum(pc_old, bs_temp.getBinString());
+        BitSet64 bs_temp = new BitSet64();
+        bs_temp.writeDoubleWord(-4);
+        pc_old = InstructionsUtils.twosComplementSum(pc_old, bs_temp.getBinString());
 
-            //updating program counter
+        //Incrementing or decrementing the counter
+        if (currentCount > 0 && !condition) {
+            cpu.setnBitCount(currentCount-1);
+        }
+
+        if (currentCount < Math.pow(2,CPU.N_FORNBITPREDICTOR)-1 && condition) {
+            cpu.setnBitCount(currentCount+1);
+        }
+
+        if(currentCount >= boundaryCount && !condition){    //if you've predicted taken but you're actually not taken, then jump out of the branch
             pc_new=InstructionsUtils.twosComplementSubstraction(pc_old,offset);
             pc.setBits(pc_new,0);
-
             throw new JumpException();
         }
 
+        else if (currentCount < boundaryCount && condition) { //if you've predict not taken but you're actually taken, then jump to the branch
+            pc_new=InstructionsUtils.twosComplementSum(pc_old,offset);
+            pc.setBits(pc_new,0);
+            throw new JumpException();
+        }
     }
 }
