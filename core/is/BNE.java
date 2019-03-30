@@ -75,7 +75,6 @@ public class BNE extends FlowControl_IType {
         if(currentCount >= boundaryCount) {
             //updating program counter
             pc_new = InstructionsUtils.twosComplementSum(pc_old, offset);
-            System.out.println("PC_EWWWWW:"+pc_new);
             pc.setBits(pc_new, 0);
 
             throw new JumpException();
@@ -85,13 +84,14 @@ public class BNE extends FlowControl_IType {
     // ID stage resolves the branch - determines
     public void ID() throws RAWException, IrregularWriteOperationException, IrregularStringOfBitsException,TwosComplementSumException, JumpException {
 
-        //Gets CPU
+        //for n-bit local predictor
         int currentCount = cpu.getnBitCount();
         double boundaryCount = Math.pow(2,CPU.N_FORNBITPREDICTOR-1);
 
 
         if(cpu.getRegister(params.get(RS_FIELD)).getWriteSemaphore()>0 || cpu.getRegister(params.get(RT_FIELD)).getWriteSemaphore()>0)
             throw new RAWException();
+
         //getting registers rs and rt
         String rs=cpu.getRegister(params.get(RS_FIELD)).getBinString();
         String rt=cpu.getRegister(params.get(RT_FIELD)).getBinString();
@@ -110,21 +110,27 @@ public class BNE extends FlowControl_IType {
         pc_old = InstructionsUtils.twosComplementSum(pc_old, bs_temp.getBinString());
 
         //Incrementing or decrementing the counter
+        //If currentCount > 0 and the true outcome is not taken then you decrement
+        //decrementing means increasing certaincy for predict not taken and decreasing certaincy for predict taken
         if (currentCount > 0 && !condition) {
             cpu.setnBitCount(currentCount-1);
         }
 
+        //If currentCount < max boundary and the true outcome is taken then you increment
+        //incrementing means decreasing certaincy for predict not taken and increasing certaincy for predict taken
         if (currentCount < Math.pow(2,CPU.N_FORNBITPREDICTOR)-1 && condition) {
             cpu.setnBitCount(currentCount+1);
         }
 
-        if(currentCount >= boundaryCount && !condition){    //if you've predicted taken but you're actually not taken, then jump out of the branch
+        //if you've predicted taken but you're actually not taken, then jump out of the branch (applying a fix)
+        if(currentCount >= boundaryCount && !condition){
             pc_new=InstructionsUtils.twosComplementSubstraction(pc_old,offset);
             pc.setBits(pc_new,0);
             throw new JumpException();
         }
 
-        else if (currentCount < boundaryCount && condition) { //if you've predict not taken but you're actually taken, then jump to the branch
+        //if you've predict not taken but you're actually taken, then jump to the branch
+        else if (currentCount < boundaryCount && condition) {
             pc_new=InstructionsUtils.twosComplementSum(pc_old,offset);
             pc.setBits(pc_new,0);
             throw new JumpException();

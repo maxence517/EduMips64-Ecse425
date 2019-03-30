@@ -80,7 +80,8 @@ public class CPU
 	
 	private static CPU cpu;
 
-	public static final int N_FORNBITPREDICTOR = 4;
+	/** The 'n' in n-bit local predictor*/
+	public static final int N_FORNBITPREDICTOR = 2;
 
 	/** Statistics */
 	private int nBitCount, cycles, instructions, RAWStalls, WAWStalls, dividerStalls, funcUnitStalls, memoryStalls, exStalls;
