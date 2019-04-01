@@ -82,6 +82,7 @@ public class CPU
 
 	/** The 'n' in n-bit local predictor*/
 	public static final int N_FORNBITPREDICTOR = 2;
+	public Map<Instruction, Integer> predictor;
 
 	/** Statistics */
 	private int nBitCount, cycles, instructions, RAWStalls, WAWStalls, dividerStalls, funcUnitStalls, memoryStalls, exStalls;
@@ -92,8 +93,8 @@ public class CPU
 	}
 	private CPU()
 	{
-		//Counter for n-bit local predictor
-		nBitCount = 0;
+		//Initialize n-bit local predictor
+		predictor = new HashMap<Instruction, Integer>();
 
 		// To avoid future singleton problems
 		Instruction dummy = Instruction.buildInstruction("BUBBLE");
@@ -124,16 +125,30 @@ public class CPU
 	}
 
 	/**
-	 * Global counter for n-bit local predictor
+	 * Local counter for n-bit local predictor
 	 * @return
 	 */
-	public int getnBitCount() {
-		return nBitCount;
+	public int getCountIF() {
+			System.out.println("IF ----------------- " + pipe.get(PipeStatus.IF).getFullName() + "------------------");
+			return predictor.get(pipe.get(PipeStatus.IF));
+			
 	}
 
-	public void setnBitCount(int nBitCount) {
-		this.nBitCount = nBitCount;
+	public int getCountID() {
+		System.out.println("ID ----------------- " + pipe.get(PipeStatus.ID).getFullName() + "------------------");
+		return predictor.get(pipe.get(PipeStatus.ID));
 	}
+
+	public void setCountID(int nBitCount) {
+		predictor.put(pipe.get(PipeStatus.ID), nBitCount);
+	}
+	public void containsInst(){
+		if(predictor.containsKey(pipe.get(PipeStatus.IF)) == false){
+			predictor.put(pipe.get(PipeStatus.IF), 0);
+			System.out.println("----------------- Key created ------------------");
+		}
+	}
+	
 	
 
 	/** Sets the CPU status.
@@ -215,7 +230,8 @@ public class CPU
     public Map<PipeStatus, Instruction> getPipeline()
     {
         return pipe;
-    }
+	}
+	
 
 	/** Returns the number of cycles performed by the CPU.
 	 *  @return an integer

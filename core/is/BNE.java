@@ -59,8 +59,12 @@ public class BNE extends FlowControl_IType {
     @Override
     public void IF() throws RAWException, IrregularWriteOperationException, IrregularStringOfBitsException, JumpException, TwosComplementSumException {
 
+        //Init the predictor from the CPU  if not already init
+        cpu.containsInst();
+
         //Gets CPU
-        int currentCount = cpu.getnBitCount();
+        int currentCount = cpu.getCountIF();
+        System.out.println("IF --------------- Count: "+currentCount+"----------------------");
         double boundaryCount = Math.pow(2,CPU.N_FORNBITPREDICTOR-1);
 
         BitSet64 bs = new BitSet64();
@@ -85,7 +89,7 @@ public class BNE extends FlowControl_IType {
     public void ID() throws RAWException, IrregularWriteOperationException, IrregularStringOfBitsException,TwosComplementSumException, JumpException {
 
         //for n-bit local predictor
-        int currentCount = cpu.getnBitCount();
+        int currentCount = cpu.getCountID();
         double boundaryCount = Math.pow(2,CPU.N_FORNBITPREDICTOR-1);
 
 
@@ -113,13 +117,13 @@ public class BNE extends FlowControl_IType {
         //If currentCount > 0 and the true outcome is not taken then you decrement
         //decrementing means increasing certaincy for predict not taken and decreasing certaincy for predict taken
         if (currentCount > 0 && !condition) {
-            cpu.setnBitCount(currentCount-1);
+            cpu.setCountID(currentCount-1);
         }
 
         //If currentCount < max boundary and the true outcome is taken then you increment
         //incrementing means decreasing certaincy for predict not taken and increasing certaincy for predict taken
         if (currentCount < Math.pow(2,CPU.N_FORNBITPREDICTOR)-1 && condition) {
-            cpu.setnBitCount(currentCount+1);
+            cpu.setCountID(currentCount+1);
         }
 
         //if you've predicted taken but you're actually not taken, then jump out of the branch (applying a fix)

@@ -44,32 +44,100 @@ public class BEQ extends FlowControl_IType {
 	name="BEQ";
     }
 
+    /**
+     * IF stage performs n-bit local predictor - jumps (predict taken) if CPU counter is >= 2^(n-1) otherwise, will perform predict not taken
+     *
+     * @throws RAWException
+     * @throws IrregularWriteOperationException
+     * @throws IrregularStringOfBitsException
+     * @throws JumpException
+     * @throws TwosComplementSumException
+     */
+    @Override
+    public void IF() throws RAWException, IrregularWriteOperationException, IrregularStringOfBitsException, JumpException, TwosComplementSumException {
+
+        //Init the predictor from the CPU  if not already init
+        cpu.containsInst();
+
+        //Gets CPU
+        int currentCount = cpu.getCountIF();
+        System.out.println("IF --------------- Count: "+currentCount+"----------------------");
+        double boundaryCount = Math.pow(2,CPU.N_FORNBITPREDICTOR-1);
+
+        BitSet64 bs = new BitSet64();
+        bs.writeHalf(params.get(OFFSET_FIELD));
+        String offset = bs.getBinString();
+
+        String pc_new = "";
+        Register pc = cpu.getPC();
+
+        String pc_old = cpu.getPC().getBinString();
+
+        if(currentCount >= boundaryCount) {
+            //updating program counter
+            pc_new = InstructionsUtils.twosComplementSum(pc_old, offset);
+            pc.setBits(pc_new, 0);
+
+            throw new JumpException();
+        }
+    }
+
+
+
+
     public void ID() throws RAWException, IrregularWriteOperationException, IrregularStringOfBitsException, JumpException,TwosComplementSumException {
+        //for n-bit local predictor
+        int currentCount = cpu.getCountID();
+        double boundaryCount = Math.pow(2,CPU.N_FORNBITPREDICTOR-1);
+
+
         if(cpu.getRegister(params.get(RS_FIELD)).getWriteSemaphore()>0 || cpu.getRegister(params.get(RT_FIELD)).getWriteSemaphore()>0)
             throw new RAWException();
+
         //getting registers rs and rt
         String rs=cpu.getRegister(params.get(RS_FIELD)).getBinString();
         String rt=cpu.getRegister(params.get(RT_FIELD)).getBinString();
-        //converting offset into a signed binary value of 64 bits in length
+         //converting offset into a signed binary value of 64 bits in length
         BitSet64 bs=new BitSet64();
         bs.writeHalf(params.get(OFFSET_FIELD));
         String offset=bs.getBinString();
-        boolean condition=rs.equals(rt);
-        if(condition)
-        {
-            String pc_new="";
-            Register pc=cpu.getPC();
-            String pc_old=cpu.getPC().getBinString();
-            
-            //subtracting 4 to the pc_old temporary variable using bitset64 safe methods
-            BitSet64 bs_temp=new BitSet64();
-            bs_temp.writeDoubleWord(-4);
-            pc_old=InstructionsUtils.twosComplementSum(pc_old,bs_temp.getBinString());
-            
-            //updating program counter
+        boolean condition=rs.equals(rt); //condition is if you have to branch or not. Condition = branch (taken), !condition = do not branch (not taken)
+
+        //test output
+        //System.out.println("-------------------- Condition : " + condition + " -------------------------");
+
+        String pc_new="";
+        Register pc=cpu.getPC();
+        String pc_old=cpu.getPC().getBinString();
+
+        BitSet64 bs_temp = new BitSet64();
+        bs_temp.writeDoubleWord(-4);
+        pc_old = InstructionsUtils.twosComplementSum(pc_old, bs_temp.getBinString());
+
+        //Incrementing or decrementing the counter
+        //If currentCount > 0 and the true outcome is not taken then you decrement
+        //decrementing means increasing certaincy for predict not taken and decreasing certaincy for predict taken
+        if (currentCount > 0 && !condition) {
+            cpu.setCountID(currentCount-1);
+        }
+
+        //If currentCount < max boundary and the true outcome is taken then you increment
+        //incrementing means decreasing certaincy for predict not taken and increasing certaincy for predict taken
+        if (currentCount < Math.pow(2,CPU.N_FORNBITPREDICTOR)-1 && condition) {
+            cpu.setCountID(currentCount+1);
+        }
+
+        //if you've predicted taken but you're actually not taken, then jump out of the branch (applying a fix)
+        if(currentCount >= boundaryCount && !condition){
+            pc_new=InstructionsUtils.twosComplementSubstraction(pc_old,offset);
+            pc.setBits(pc_new,0);
+            throw new JumpException();
+        }
+
+        //if you've predict not taken but you're actually taken, then jump to the branch
+        else if (currentCount < boundaryCount && condition) {
             pc_new=InstructionsUtils.twosComplementSum(pc_old,offset);
             pc.setBits(pc_new,0);
-
             throw new JumpException();
         }
     }
