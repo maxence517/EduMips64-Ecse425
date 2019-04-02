@@ -37,7 +37,6 @@ public class CPU
 	private Register[] gpr;
     private static final Logger logger = Logger.getLogger(CPU.class.getName());
 
-	
     /** Program Counter*/
 	private Register pc,old_pc;
 	private Register LO,HI;
@@ -316,8 +315,19 @@ public class CPU
 			// put in the IF state the instruction the PC points to
 			pipe.put(PipeStatus.IF, mem.getInstruction(pc));
 			pipe.put(PipeStatus.EX, pipe.get(PipeStatus.ID));
+			
+			//custom
+		    // True = flushing, False = no flushing
+		    boolean flushingOn = true;
+			if (flushingOn) {
 			pipe.put(PipeStatus.ID, Instruction.buildInstruction("BUBBLE"));	
+			} else {
+				pipe.put(PipeStatus.ID, pipe.get(PipeStatus.IF));
+			}
+			// end custom
+			
 			old_pc.writeDoubleWord((pc.getValue()));
+			
 			pc.writeDoubleWord((pc.getValue())+4);
 			if(syncex != null)
 				throw new SynchronousException(syncex);
