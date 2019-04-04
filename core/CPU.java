@@ -36,7 +36,11 @@ public class CPU
 	private Memory mem;
 	private Register[] gpr;
     private static final Logger logger = Logger.getLogger(CPU.class.getName());
-
+    
+    // custom
+    // True = flushing, False = no flushing
+    public boolean flushingOn = true;
+    
     /** Program Counter*/
 	private Register pc,old_pc;
 	private Register LO,HI;
@@ -317,8 +321,6 @@ public class CPU
 			pipe.put(PipeStatus.EX, pipe.get(PipeStatus.ID));
 			
 			//custom
-		    // True = flushing, False = no flushing
-		    boolean flushingOn = true;
 			if (flushingOn) {
 			pipe.put(PipeStatus.ID, Instruction.buildInstruction("BUBBLE"));	
 			} else {
