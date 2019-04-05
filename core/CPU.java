@@ -39,7 +39,7 @@ public class CPU
     
     // custom
     // True = flushing, False = no flushing
-    public boolean flushingOn = true;
+    public boolean flushingOn = false;
     
     /** Program Counter*/
 	private Register pc,old_pc;
@@ -322,15 +322,17 @@ public class CPU
 			
 			//custom
 			if (flushingOn) {
-			pipe.put(PipeStatus.ID, Instruction.buildInstruction("BUBBLE"));	
+				pipe.put(PipeStatus.ID, Instruction.buildInstruction("BUBBLE"));	
 			} else {
 				pipe.put(PipeStatus.ID, pipe.get(PipeStatus.IF));
+				instructions--;
 			}
 			// end custom
 			
 			old_pc.writeDoubleWord((pc.getValue()));
 			
 			pc.writeDoubleWord((pc.getValue())+4);
+
 			if(syncex != null)
 				throw new SynchronousException(syncex);
 
