@@ -50,20 +50,16 @@ public class BNE extends FlowControl_IType {
         BitSet64 bs = new BitSet64();
         bs.writeHalf(params.get(OFFSET_FIELD));
         String offset = bs.getBinString();
-//        boolean condition = !rs.equals(rt);
-//
-//        if (condition) {
-            String pc_new = "";
-            Register pc = cpu.getPC();
-            String pc_old = cpu.getPC().getBinString();
 
-            //updating program counter
-            pc_new = InstructionsUtils.twosComplementSum(pc_old, offset);
-            System.out.println("PC_EWWWWW:"+pc_new);
-            pc.setBits(pc_new, 0);
+        String pc_new = "";
+        Register pc = cpu.getPC();
+        String pc_old = cpu.getPC().getBinString();
 
-            throw new JumpException();
-//        }
+        //updating program counter
+        pc_new = InstructionsUtils.twosComplementSum(pc_old, offset);
+        pc.setBits(pc_new, 0);
+
+        throw new JumpException();
     }
 
     // ID stage resolves the branch - determines

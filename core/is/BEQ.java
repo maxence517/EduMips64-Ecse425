@@ -44,6 +44,25 @@ public class BEQ extends FlowControl_IType {
 	name="BEQ";
     }
 
+    // IF stage is performing the prediction - jumping to the predicted location
+    @Override
+    public void IF() throws RAWException, IrregularWriteOperationException, IrregularStringOfBitsException, JumpException, TwosComplementSumException {
+
+        BitSet64 bs = new BitSet64();
+        bs.writeHalf(params.get(OFFSET_FIELD));
+        String offset = bs.getBinString();
+
+        String pc_new = "";
+        Register pc = cpu.getPC();
+        String pc_old = cpu.getPC().getBinString();
+
+        //updating program counter
+        pc_new = InstructionsUtils.twosComplementSum(pc_old, offset);
+        pc.setBits(pc_new, 0);
+
+        throw new JumpException();
+    }
+
     public void ID() throws RAWException, IrregularWriteOperationException, IrregularStringOfBitsException, JumpException,TwosComplementSumException {
         if(cpu.getRegister(params.get(RS_FIELD)).getWriteSemaphore()>0 || cpu.getRegister(params.get(RT_FIELD)).getWriteSemaphore()>0)
             throw new RAWException();
@@ -55,7 +74,7 @@ public class BEQ extends FlowControl_IType {
         bs.writeHalf(params.get(OFFSET_FIELD));
         String offset=bs.getBinString();
         boolean condition=rs.equals(rt);
-        if(condition)
+        if(!condition)
         {
             String pc_new="";
             Register pc=cpu.getPC();
@@ -67,7 +86,7 @@ public class BEQ extends FlowControl_IType {
             pc_old=InstructionsUtils.twosComplementSum(pc_old,bs_temp.getBinString());
             
             //updating program counter
-            pc_new=InstructionsUtils.twosComplementSum(pc_old,offset);
+            pc_new=InstructionsUtils.twosComplementSubstraction(pc_old,offset);
             pc.setBits(pc_new,0);
 
             throw new JumpException();
